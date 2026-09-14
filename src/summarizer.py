@@ -1,53 +1,45 @@
-import logging
 import os
-from typing import Dict, List, Any
+import logging
 from google import genai
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("src.summarizer")
 
+def generate_morning_brief(chart_data: dict, trends_data: list, api_key: str = None) -> str:
+    """
+    Takes raw chart and social trend data, formats it into a prompt,
+    and calls Google Gemini to generate an executive HTML briefing.
+    """
+    api_key = api_key or os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is missing.")
 
-def generate_morning_brief(chart_data: Dict[str, Any], trend_data: List[Dict[str, Any]], api_key: str = None) -> str:
-    """
-    Generates an executive morning report using Google Gemini API.
+    client = genai.Client(api_key=api_key)
+
+    formatted_trends = []
+    for t in trends_data:
+        if isinstance(t, dict):
+            formatted_trends.append(f"{t.get('platform', 'Trend')}: {t.get('topic', '')} ({t.get('volume', '')})")
+        else:
+            formatted_trends.append(str(t))
+
+    prompt = f"""
+    You are an executive assistant preparing a daily morning briefing.
     
-    Args:
-        chart_data (dict): Market chart telemetry.
-        trend_data (list): Social and news trend listings.
-        api_key (str, optional): Gemini API key. Defaults to GEMINI_API_KEY environment variable.
-        
-    Returns:
-        str: HTML formatted morning report.
-    """
-    resolved_key = api_key or os.getenv("GEMINI_API_KEY")
+    Data Provided:
+    1. Market Chart: Symbol {chart_data.get('symbol')}, Price {chart_data.get('price')}, Summary: {chart_data.get('summary')}
+    2. Viral Social Trends: {', '.join(formatted_trends)}
     
-    if not resolved_key:
-        logger.warning("No GEMINI_API_KEY provided. Returning fallback report.")
-        return f"<h2>Daily Briefing (Fallback)</h2><p>Market: {chart_data.get('summary', 'N/A')}</p>"
+    Please generate a sleek, professional, single-page HTML email body. 
+    Use inline CSS for styling. Include an executive overview, chart highlights, and key trend takeaways.
+    Return ONLY valid HTML code inside <div> tags without markdown backticks.
+    """
 
     try:
-        client = genai.Client(api_key=resolved_key)
-        
-        prompt = f"""
-        You are an executive morning briefing AI agent. 
-        Synthesize the following telemetry into a crisp, readable HTML email digest.
-        
-        --- FINANCIAL CHART DATA ---
-        Symbol: {chart_data.get('symbol')}
-        Price: {chart_data.get('price')} {chart_data.get('currency', 'USD')}
-        Summary: {chart_data.get('summary')}
-        
-        --- VIRAL TREND DATA ---
-        {trend_data}
-        
-        Provide the response formatted in modern, clean HTML with styled section headers.
-        """
-        
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
         )
         return response.text
-
     except Exception as e:
         logger.error(f"Error generating AI brief: {e}")
-        return f"<h2>Daily Briefing</h2><p>Error calling AI engine: {e}</p>"
+        return f"<p>Error calling AI engine: {e}</p>"
