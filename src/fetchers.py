@@ -1,76 +1,70 @@
 import logging
-from typing import Dict, List, Any
+import requests
+import xml.etree.ElementTree as ET
 
-# Configure logging for data collection monitoring
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("src.fetchers")
 
-
-def fetch_chart_data(symbol: str = "BTC/USD") -> Dict[str, Any]:
+def fetch_chart_data(symbol: str = "bitcoin") -> dict:
     """
-    Fetches market chart details for a given trading pair or stock symbol.
+    Fetches live market chart price and 24h stats from CoinGecko API.
+    """
+    url = f"https://api.coingecko.com/api/v3/simple/price"
+    params = {
+        "ids": symbol.lower(),
+        "vs_currencies": "usd",
+        "include_24hr_change": "true",
+        "include_24hr_vol": "true"
+    }
     
-    Args:
-        symbol (str): Ticker or trading pair (e.g., 'BTC/USD', 'AAPL')
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
         
-    Returns:
-        dict: Containing symbol, current price, and market summary.
-    """
-    logger.info(f"Fetching chart data for symbol: {symbol}")
-    
-    try:
-        # Placeholder integration structure for market data API (e.g., CoinGecko / Yahoo Finance)
-        # We return structured data matching our test requirements
+        coin_data = data.get(symbol.lower(), {})
+        price = coin_data.get("usd", 0.0)
+        change_24h = coin_data.get("usd_24h_change", 0.0)
+        
         return {
-            "symbol": symbol,
-            "price": 67450.00,
-            "currency": "USD",
-            "summary": f"24h change +3.2% for {symbol}. Higher highs forming on the 4h timeframe.",
-            "status": "success"
+            "symbol": symbol.upper(),
+            "price": round(price, 2),
+            "summary": f"24h Price Change: {change_24h:+.2f}%"
         }
     except Exception as e:
-        logger.error(f"Failed to fetch chart data for {symbol}: {e}")
+        logger.error(f"Error fetching live chart data: {e}")
+        # Graceful fallback
         return {
-            "symbol": symbol,
+            "symbol": symbol.upper(),
             "price": 0.0,
-            "currency": "USD",
-            "summary": "Error retrieving market data.",
-            "status": "error"
+            "summary": "Live data temporarily unavailable"
         }
 
-
-def fetch_social_trends() -> List[Dict[str, Any]]:
+def fetch_social_trends() -> list:
     """
-    Fetches viral social media topics (TikTok, X/Twitter, Google Trends).
-    
-    Returns:
-        list: List of trending topic dictionaries with volume and context.
+    Fetches real-time viral search trends via Google Trends RSS feed.
     """
-    logger.info("Fetching social media trends...")
+    rss_url = "https://trends.google.com/trending/rss?geo=US"
     
     try:
-        # Placeholder structure for social APIs (TikTok Research API / RSS feeds)
-        trends = [
-            {
-                "platform": "TikTok",
-                "topic": "#AIAutomation",
-                "volume": "12.4M views",
-                "description": "Short-form video automation tools and workflow tips"
-            },
-            {
+        response = requests.get(rss_url, timeout=10)
+        response.raise_for_status()
+        
+        root = ET.fromstring(response.content)
+        trends = []
+        
+        # Parse top 5 trending search items from RSS
+        for item in root.findall(".//item")[:5]:
+            title = item.find("title").text if item.find("title") is not None else "Unknown"
+            traffic = item.find("{https://trends.google.com/trending/rss}approx_traffic")
+            traffic_text = traffic.text if traffic is not None else "Surging"
+            
+            trends.append({
                 "platform": "Google Trends",
-                "topic": "Market Rally Today",
-                "volume": "+200K searches",
-                "description": "Spike in interest regarding market break-outs and inflation data"
-            },
-            {
-                "platform": "X / Twitter",
-                "topic": "#CryptoNews",
-                "volume": "85.2K posts",
-                "description": "Discussions on major crypto regulatory updates"
-            }
-        ]
-        return trends
+                "topic": title,
+                "volume": traffic_text
+            })
+            
+        return trends if trends else [{"platform": "Trends", "topic": "AI & Tech Markets", "volume": "High"}]
     except Exception as e:
-        logger.error(f"Failed to fetch social trends: {e}")
-        return []
+        logger.error(f"Error fetching live social trends: {e}")
+        return [{"platform": "Trends", "topic": "General Tech Trends", "volume": "N/A"}]
