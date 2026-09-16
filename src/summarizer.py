@@ -4,15 +4,21 @@ from google import genai
 
 logger = logging.getLogger("src.summarizer")
 
-def generate_morning_brief(chart_data: dict, trends_data: list, api_key: str = None) -> str:
+def generate_morning_brief(
+    chart_data: dict, 
+    trends_data: list, 
+    sentiment_data: dict = None, 
+    api_key: str = None
+) -> str:
     """
-    Takes raw chart and social trend data, formats it into a prompt,
+    Takes raw chart, social trend, and sentiment data, formats it into a prompt,
     and calls Google Gemini to generate an executive HTML briefing.
     """
     api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is missing.")
 
+    sentiment = sentiment_data or {"score": "50", "classification": "Neutral"}
     client = genai.Client(api_key=api_key)
 
     formatted_trends = []
@@ -28,7 +34,9 @@ def generate_morning_brief(chart_data: dict, trends_data: list, api_key: str = N
     Data Provided:
     1. Market Chart: Symbol {chart_data.get('symbol')}, Price {chart_data.get('price')}, Summary: {chart_data.get('summary')}
     2. Viral Social Trends: {', '.join(formatted_trends)}
+    3. Market Sentiment Index: {sentiment.get('score')}/100 ({sentiment.get('classification')})
     
+    Include a top-level visual badge displaying the overall Market Sentiment classification.
     Please generate a sleek, professional, single-page HTML email body. 
     Use inline CSS for styling. Include an executive overview, chart highlights, and key trend takeaways.
     Return ONLY valid HTML code inside <div> tags without markdown backticks.

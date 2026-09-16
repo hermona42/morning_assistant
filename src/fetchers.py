@@ -106,3 +106,20 @@ def fetch_social_trends() -> list:
         logger.error(f"Error fetching Google Trends: {e}")
         
     return trends
+
+def fetch_sentiment_index() -> dict:
+    """
+    Fetches the daily Crypto Fear & Greed Index from Alternative.me.
+    """
+    url = "https://api.alternative.me/fng/"
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        data = response.json().get("data", [])[0]
+        return {
+            "score": data.get("value", "N/A"),
+            "classification": data.get("value_classification", "Neutral")
+        }
+    except Exception as e:
+        logger.error(f"Error fetching sentiment index: {e}")
+        return {"score": "50", "classification": "Neutral"}
